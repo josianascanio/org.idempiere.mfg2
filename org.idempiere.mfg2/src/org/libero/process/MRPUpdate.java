@@ -259,7 +259,9 @@ public class MRPUpdate extends SvrProcess
 			+" WHERE t.Qty > 0 AND "
 			+"t.AD_Client_ID=? AND t.AD_Org_ID=? AND t.M_Warehouse_ID= ?";
 		executeUpdate(sql + sql_insert,  params);
-
+		//validate that all orderlines have datepromised 
+		executeUpdate("update c_orderline ol set datepromised = o.datepromised from c_order o where o.c_order_id=ol.c_order_id "
+				+ " and ol.datepromised is null and o.docstatus IN ('CO','IP')",null);
 		// Insert from C_OrderLine
 		sql_insert = " SELECT t.ad_org_id,"
 			+"t.created, t.createdby , t.datepromised,"
