@@ -16,8 +16,8 @@ pipeline {
             steps {
                 dir('target-platform') {
                     git branch: '10', url: 'https://github.com/ingeint/idempiere-target-platform-plugin.git'
-					sh './plugin-builder build ../../${PLUGIN_NAME}_${BRANCH}'
-                    archiveArtifacts artifacts: "target/${PLUGIN_NAME}_${BRANCH}-${IDEMPIERE_VERSION}.${BUILD_NUMBER}.jar", fingerprint: true
+					sh './plugin-builder build ../../${PLUGIN_NAME}_${BRANCH}/${PLUGIN_NAME}'
+                    archiveArtifacts artifacts: "target/${PLUGIN_NAME}_${BRANCH}/${PLUGIN_NAME}-${IDEMPIERE_VERSION}.${BUILD_NUMBER}.jar", fingerprint: true
                     
                 }
             }
