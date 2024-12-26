@@ -3,7 +3,7 @@ pipeline {
     environment {
         PLUGIN_NAME = "org.idempiere.mfg2"
         IDEMPIERE_VERSION = "10.0.0"
-        BRANCH = "master"
+        BRANCH = "10.0.0"
     }
     stages {
         stage('Compile') {
