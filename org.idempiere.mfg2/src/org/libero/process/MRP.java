@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import org.adempiere.exceptions.AdempiereException;
 import org.adempiere.exceptions.DBException;
@@ -81,6 +82,7 @@ public class MRP extends SvrProcess
 	private int     p_M_Warehouse_ID= 0;
 	private boolean p_IsRequiredDRP = false;
 	private int     p_Planner_ID = 0;
+	private List<Integer> selectedOrderLines = new ArrayList<>();
 	@SuppressWarnings("unused")
 	private String  p_Version = "1";
 	/** Product ID - for testing purposes */
@@ -147,6 +149,26 @@ public class MRP extends SvrProcess
 			{    
 				p_Version = (String)para[i].getParameter();        
 			}
+			   else if (name.equals("C_Order_ID")) {
+		            String selectedOrders = para[i].getParameter().toString(); // IDs de las órdenes seleccionadas (separados por comas)
+		            if (selectedOrders != null && !selectedOrders.isEmpty()) {
+		                for (String id : selectedOrders.split(",")) {
+		                    int orderId = Integer.parseInt(id.trim());
+		                    // Agregar las líneas asociadas al pedido
+		                    String sqlOrderLines = "SELECT C_OrderLine_ID FROM C_OrderLine WHERE C_Order_ID = ?";
+		                    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderLines, get_TrxName())) {
+		                        pstmt.setInt(1, orderId);
+		                        try (ResultSet rs = pstmt.executeQuery()) {
+		                            while (rs.next()) {
+		                                selectedOrderLines.add(rs.getInt("C_OrderLine_ID"));
+		                            }
+		                        }
+		                    } catch (SQLException e) {
+		                        throw new DBException(e);
+		                    }
+		                }
+		            }
+		        }
 			else
 				log.log(Level.SEVERE,"prepare - Unknown Parameter: " + name);
 		}
@@ -356,8 +378,17 @@ public class MRP extends SvrProcess
 							+" AND mrp.M_Warehouse_ID=?"
 							+" AND mrp.DatePromised<=?"
 							+" AND COALESCE(mrp.LowLevel,0)=? "
-							+(p_M_Product_ID > 0 ? " AND mrp.M_Product_ID="+p_M_Product_ID : "")
-							+" ORDER BY  mrp.M_Product_ID , mrp.DatePromised";
+							+(p_M_Product_ID > 0 ? " AND mrp.M_Product_ID="+p_M_Product_ID : "");
+							
+							
+							if (!selectedOrderLines.isEmpty()) {
+							    sql += " AND mrp.C_OrderLine_ID IN (" + selectedOrderLines.stream()
+							              .map(String::valueOf).collect(Collectors.joining(",")) + ")";
+							}				
+							
+							
+							sql +=" ORDER BY  mrp.M_Product_ID , mrp.DatePromised";
+							
 				pstmt = DB.prepareStatement (sql, get_TrxName());
 				pstmt.setString(1, MPPMRP.TYPEMRP_Demand);
 				pstmt.setInt(2, AD_Client_ID);
@@ -1070,12 +1101,17 @@ public class MRP extends SvrProcess
 			throw new AdempiereException("@FillMandatory@ @PP_Product_BOM_ID@, @AD_Workflow_ID@ ( @M_Product_ID@="+product.getValue()+")");
 		}
 		
-		   //C_OrderLine_ID desde PP_MRP
+		//C_OrderLine_ID desde PP_MRP
 	    String sqlOrderLine = "SELECT C_OrderLine_ID FROM PP_MRP WHERE PP_MRP_ID = ?";
 	    int C_OrderLine_ID = DB.getSQLValue(get_TrxName(), sqlOrderLine, PP_MRP_ID);
 
 	    if (C_OrderLine_ID <= 0) {
 	        throw new AdempiereException("No valid C_OrderLine_ID found for PP_MRP_ID: " + PP_MRP_ID);
+	    }
+	    
+	    if (!selectedOrderLines.isEmpty() && !selectedOrderLines.contains(C_OrderLine_ID)) {
+	        log.info("Skipping C_OrderLine_ID: " + C_OrderLine_ID + " as it is not in the selected list.");
+	        return;
 	    }
 
 	    // Verificar si ya existe una orden asociada al C_OrderLine_ID
