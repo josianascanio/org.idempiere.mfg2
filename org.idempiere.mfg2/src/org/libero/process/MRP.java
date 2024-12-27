@@ -96,6 +96,7 @@ public class MRP extends SvrProcess
 	private Timestamp Today = new Timestamp (System.currentTimeMillis());  
 	private Timestamp TimeFence = null;
 	private Timestamp Planning_Horizon = null;
+	private Integer parentDocumentNo = null;
 	// Document Types
 	private int docTypeReq_ID = 0;
 	private int docTypeMO_ID = 0; 
@@ -843,7 +844,7 @@ public class MRP extends SvrProcess
 		}
 		// Manufacturing Order
 		else if (product.isBOM())
-		{
+		{	 
 			createPPOrder(AD_Org_ID, PP_MRP_ID, product,QtyPlanned, DemandDateStartSchedule);
 		}
 		else
@@ -1108,8 +1109,20 @@ public class MRP extends SvrProcess
 		order.setScheduleType(MPPMRP.TYPEMRP_Demand);
 		order.setPriorityRule(MPPOrder.PRIORITYRULE_Medium);
 		order.setDocAction(MPPOrder.DOCACTION_Complete);
+		
+		// Orden relacionada
+	    if (parentDocumentNo != null) {
+	        order.set_ValueOfColumn("PP_OrderRelated_ID", parentDocumentNo);
+	    }
+		
 		order.saveEx();
 		//commitEx();
+		
+		// Captura el DocumentNo del primer pedido
+	    if (parentDocumentNo == null) {
+	        parentDocumentNo = order.get_ID();
+	        log.info("Captured parentDocumentNo: " + parentDocumentNo);
+	    }
 
 		count_MO += 1;
 	}
