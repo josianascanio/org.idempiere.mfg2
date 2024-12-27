@@ -1070,6 +1070,23 @@ public class MRP extends SvrProcess
 			throw new AdempiereException("@FillMandatory@ @PP_Product_BOM_ID@, @AD_Workflow_ID@ ( @M_Product_ID@="+product.getValue()+")");
 		}
 		
+		   //C_OrderLine_ID desde PP_MRP
+	    String sqlOrderLine = "SELECT C_OrderLine_ID FROM PP_MRP WHERE PP_MRP_ID = ?";
+	    int C_OrderLine_ID = DB.getSQLValue(get_TrxName(), sqlOrderLine, PP_MRP_ID);
+
+	    if (C_OrderLine_ID <= 0) {
+	        throw new AdempiereException("No valid C_OrderLine_ID found for PP_MRP_ID: " + PP_MRP_ID);
+	    }
+
+	    // Verificar si ya existe una orden asociada al C_OrderLine_ID
+	    String sqlCheck = "SELECT COUNT(*) FROM PP_Order WHERE C_OrderLine_ID = ? AND DocStatus IN ('CL', 'CO')";
+	    int existingOrders = DB.getSQLValue(get_TrxName(), sqlCheck, C_OrderLine_ID);
+
+	    if (existingOrders > 0) {
+	        log.warning("Manufacturing order already exists for C_OrderLine_ID: " + C_OrderLine_ID);
+	        return;
+	    }
+		
 		MPPOrder order = (MPPOrder)MTable.get(getCtx(), MPPOrder.Table_Name).getPO(0, get_TrxName());
 		order.addDescription("MO generated from MRP");
 		order.setAD_Org_ID(AD_Org_ID);
@@ -1096,6 +1113,7 @@ public class MRP extends SvrProcess
 		order.setPlanner_ID(m_product_planning.getPlanner_ID());
 		order.setDateOrdered(getToday());                       
 		order.setDatePromised(DemandDateStartSchedule);
+	
 		
 		//TODO red1-- phepetko commented 
 		int duration =  0;//MPPMRP.getDurationDays(null,QtyPlanned, m_product_planning);
@@ -1109,6 +1127,7 @@ public class MRP extends SvrProcess
 		order.setScheduleType(MPPMRP.TYPEMRP_Demand);
 		order.setPriorityRule(MPPOrder.PRIORITYRULE_Medium);
 		order.setDocAction(MPPOrder.DOCACTION_Complete);
+		order.setC_OrderLine_ID(C_OrderLine_ID);
 		
 		// Orden relacionada
 	    if (parentDocumentNo != null) {
