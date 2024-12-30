@@ -150,11 +150,10 @@ public class MRP extends SvrProcess
 				p_Version = (String)para[i].getParameter();        
 			}
 			   else if (name.equals("C_Order_ID")) {
-		            String selectedOrders = para[i].getParameter().toString(); // IDs de las órdenes seleccionadas (separados por comas)
+		            String selectedOrders = para[i].getParameter().toString(); 
 		            if (selectedOrders != null && !selectedOrders.isEmpty()) {
 		                for (String id : selectedOrders.split(",")) {
 		                    int orderId = Integer.parseInt(id.trim());
-		                    // Agregar las líneas asociadas al pedido
 		                    String sqlOrderLines = "SELECT C_OrderLine_ID FROM C_OrderLine WHERE C_Order_ID = ?";
 		                    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderLines, get_TrxName())) {
 		                        pstmt.setInt(1, orderId);
@@ -1165,21 +1164,28 @@ public class MRP extends SvrProcess
 		order.setDocAction(MPPOrder.DOCACTION_Complete);
 		order.setC_OrderLine_ID(C_OrderLine_ID);
 		
-		// Orden relacionada
+	    // Relacionar la orden si es del mismo C_OrderLine_ID
 	    if (parentDocumentNo != null) {
-	        order.set_ValueOfColumn("PP_OrderRelated_ID", parentDocumentNo);
-	    }
-		
-		order.saveEx();
-		//commitEx();
-		
-		// Captura el DocumentNo del primer pedido
-	    if (parentDocumentNo == null) {
-	        parentDocumentNo = order.get_ID();
-	        log.info("Captured parentDocumentNo: " + parentDocumentNo);
+	        String sqlParentOrderLine = "SELECT C_OrderLine_ID FROM PP_Order WHERE PP_Order_ID = ?";
+	        int parentOrderLineID = DB.getSQLValue(get_TrxName(), sqlParentOrderLine, parentDocumentNo);
+
+	        if (parentOrderLineID == C_OrderLine_ID) {
+	            order.set_ValueOfColumn("PP_OrderRelated_ID", parentDocumentNo);
+	        } else {
+	            log.info("C_OrderLine_ID changed, capturing a new parentDocumentNo.");
+	            parentDocumentNo = null; 
+	        }
 	    }
 
-		count_MO += 1;
+	    order.saveEx();
+
+	    
+	    if (parentDocumentNo == null) {
+	        parentDocumentNo = order.get_ID();
+	        log.info("Captured new parentDocumentNo: " + parentDocumentNo);
+	    }
+
+	    count_MO += 1;
 	}
 	
 	private void deletePO(String tableName, String whereClause, Object[] params) throws SQLException
