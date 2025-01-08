@@ -117,61 +117,52 @@ public class MRP extends SvrProcess
 	private static CCache<Integer,MBPartner>   partner_cache 	= new CCache<Integer,MBPartner>(MBPartner.Table_Name, 50);
 
 
-	protected void prepare()
-	{
-		ProcessInfoParameter[] para = getParameter();
-		for (int i = 0; i < para.length; i++)
-		{
-			String name = para[i].getParameterName();
-			if (para[i].getParameter() == null)
-				;
-			else if (name.equals("DeleteMRP"))
-			{    
-				p_DeleteMRP = para[i].getParameterAsBoolean();
-			}   
-			else if (name.equals("AD_Org_ID"))
-			{    
-				p_AD_Org_ID = para[i].getParameterAsInt();
-			}                       
-			else if (name.equals("S_Resource_ID"))
-			{    
-				p_S_Resource_ID = para[i].getParameterAsInt();    
-			}
-			else if (name.equals("M_Warehouse_ID"))
-			{    
-				p_M_Warehouse_ID = para[i].getParameterAsInt();                
-			}
-			else if (name.equals("IsRequiredDRP"))
-			{    
-				p_IsRequiredDRP = para[i].getParameterAsBoolean();        
-			}
-			else if (name.equals("Version"))
-			{    
-				p_Version = (String)para[i].getParameter();        
-			}
-			   else if (name.equals("C_Order_ID")) {
-		            String selectedOrders = para[i].getParameter().toString(); 
-		            if (selectedOrders != null && !selectedOrders.isEmpty()) {
-		                for (String id : selectedOrders.split(",")) {
-		                    int orderId = Integer.parseInt(id.trim());
-		                    String sqlOrderLines = "SELECT C_OrderLine_ID FROM C_OrderLine WHERE C_Order_ID = ?";
-		                    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderLines, get_TrxName())) {
-		                        pstmt.setInt(1, orderId);
-		                        try (ResultSet rs = pstmt.executeQuery()) {
-		                            while (rs.next()) {
-		                                selectedOrderLines.add(rs.getInt("C_OrderLine_ID"));
-		                            }
-		                        }
-		                    } catch (SQLException e) {
-		                        throw new DBException(e);
-		                    }
-		                }
-		            }
-		        }
-			else
-				log.log(Level.SEVERE,"prepare - Unknown Parameter: " + name);
-		}
-	}	//	prepare
+	protected void prepare() {
+	    ProcessInfoParameter[] para = getParameter();
+	    for (int i = 0; i < para.length; i++) {
+	        String name = para[i].getParameterName();
+	        if (para[i].getParameter() == null) {
+	            ;
+	        } else if (name.equals("DeleteMRP")) {
+	            p_DeleteMRP = para[i].getParameterAsBoolean();
+	        } else if (name.equals("AD_Org_ID")) {
+	            p_AD_Org_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("S_Resource_ID")) {
+	            p_S_Resource_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("M_Warehouse_ID")) {
+	            p_M_Warehouse_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("IsRequiredDRP")) {
+	            p_IsRequiredDRP = para[i].getParameterAsBoolean();
+	        } else if (name.equals("Version")) {
+	            p_Version = (String) para[i].getParameter();
+	        } else if (name.equals("C_Order_ID")) {
+	            String selectedOrders = para[i].getParameter().toString();
+	            if (selectedOrders != null && !selectedOrders.isEmpty()) {
+	                for (String id : selectedOrders.split(",")) {
+	                    int orderId = Integer.parseInt(id.trim());
+	                    String sqlOrderLines = "SELECT C_OrderLine_ID FROM C_OrderLine WHERE C_Order_ID = ?";
+	                    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderLines, get_TrxName())) {
+	                        pstmt.setInt(1, orderId);
+	                        try (ResultSet rs = pstmt.executeQuery()) {
+	                            while (rs.next()) {
+	                                selectedOrderLines.add(rs.getInt("C_OrderLine_ID"));
+	                            }
+	                        }
+	                    } catch (SQLException e) {
+	                        throw new DBException(e);
+	                    }
+	                }
+	            }
+	        } else if (name.equals("DatePromisedFrom")) {
+	            DatePromisedFrom = (Timestamp) para[i].getParameter();
+	        } else if (name.equals("DatePromisedTo")) {
+	            DatePromisedTo = (Timestamp) para[i].getParameter();
+	        } else {
+	            log.log(Level.SEVERE, "prepare - Unknown Parameter: " + name);
+	        }
+	    }
+	}
+
 	
 	/**
 	 * @return the p_AD_Org_ID
@@ -383,7 +374,14 @@ public class MRP extends SvrProcess
 							if (!selectedOrderLines.isEmpty()) {
 							    sql += " AND mrp.C_OrderLine_ID IN (" + selectedOrderLines.stream()
 							              .map(String::valueOf).collect(Collectors.joining(",")) + ")";
-							}				
+							}	
+							
+							if (DatePromisedFrom != null) {
+							    sql += " AND mrp.DatePromised >= ?";
+							}
+							if (DatePromisedTo != null) {
+							    sql += " AND mrp.DatePromised <= ?";
+							}
 							
 							
 							sql +=" ORDER BY  mrp.M_Product_ID , mrp.DatePromised";
@@ -395,6 +393,13 @@ public class MRP extends SvrProcess
 				pstmt.setInt(4, M_Warehouse_ID);
 				pstmt.setTimestamp(5, Planning_Horizon);
 				pstmt.setInt(6, level);
+				int paramIndex = 7;
+				if (DatePromisedFrom != null) {
+				    pstmt.setTimestamp(paramIndex++, DatePromisedFrom);
+				}
+				if (DatePromisedTo != null) {
+				    pstmt.setTimestamp(paramIndex++, DatePromisedTo);
+				}
 				rs = pstmt.executeQuery();
 				while (rs.next())
 				{
@@ -1121,6 +1126,15 @@ public class MRP extends SvrProcess
 	        log.warning("Manufacturing order already exists for C_OrderLine_ID: " + C_OrderLine_ID);
 	        return;
 	    }
+	    
+	    String sqlDuplicateCheck = "SELECT COUNT(*) FROM PP_Order WHERE C_OrderLine_ID = ? AND PP_OrderRelated_ID = ? AND M_Product_ID = ? AND DocStatus = 'DR'";
+	    int duplicateCount = DB.getSQLValue(get_TrxName(), sqlDuplicateCheck, C_OrderLine_ID, parentDocumentNo, m_product_planning.getM_Product_ID());
+
+	    if (duplicateCount > 0) {
+	        log.warning("Duplicate related order detected for C_OrderLine_ID: " + C_OrderLine_ID + ", Product_ID: " + m_product_planning.getM_Product_ID());
+	        return;
+	    }
+
 		
 		MPPOrder order = (MPPOrder)MTable.get(getCtx(), MPPOrder.Table_Name).getPO(0, get_TrxName());
 		order.addDescription("MO generated from MRP");
