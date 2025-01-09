@@ -1192,6 +1192,8 @@ public class MRP extends SvrProcess
 	    }
 
 	    order.saveEx();
+	    //Nuevo campo de M_AttributeSet_ID en la actividad del nodo
+	    updateAttributeSetForOrderNodes(order.getPP_Order_ID());
 
 	    
 	    if (parentDocumentNo == null) {
@@ -1201,6 +1203,36 @@ public class MRP extends SvrProcess
 
 	    count_MO += 1;
 	}
+	
+	protected void updateAttributeSetForOrderNodes(int PP_Order_ID) {
+	    String trxName = get_TrxName();
+	    String sqlOrderNodes = "SELECT PP_Order_Node_ID, AD_WF_Node_ID FROM PP_Order_Node WHERE PP_Order_ID = ?";
+
+	    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderNodes, trxName)) {
+	        pstmt.setInt(1, PP_Order_ID);
+	        ResultSet rs = pstmt.executeQuery();
+
+	        while (rs.next()) {
+	            int PP_Order_Node_ID = rs.getInt("PP_Order_Node_ID");
+	            int AD_WF_Node_ID = rs.getInt("AD_WF_Node_ID");
+
+	            String sqlWorkflowNode = "SELECT M_AttributeSet_ID FROM AD_WF_Node WHERE AD_WF_Node_ID = ?";
+	            int attributeSetID = DB.getSQLValue(trxName, sqlWorkflowNode, AD_WF_Node_ID);
+
+	            if (attributeSetID > 0) {
+	                String updateSQL = "UPDATE PP_Order_Node SET M_AttributeSet_ID = ? WHERE PP_Order_Node_ID = ?";
+	                DB.executeUpdate(updateSQL, new Object[]{attributeSetID, PP_Order_Node_ID}, false, trxName);
+	                log.info("Updated M_AttributeSet_ID for PP_Order_Node_ID: " + PP_Order_Node_ID);
+	            } else {
+	                log.warning("No M_AttributeSet_ID found for AD_WF_Node_ID: " + AD_WF_Node_ID);
+	            }
+	        }
+	    } catch (SQLException e) {
+	        log.severe("Error updating M_AttributeSet_ID: " + e.getMessage());
+	        throw new AdempiereException(e);
+	    }
+	}
+
 	
 	private void deletePO(String tableName, String whereClause, Object[] params) throws SQLException
 	{
