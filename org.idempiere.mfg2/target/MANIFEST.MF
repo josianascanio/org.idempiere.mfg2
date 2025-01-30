@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Idempiere Manufacturing2
 Bundle-SymbolicName: org.idempiere.mfg2 ;singleton:=true
-Bundle-Version: 10.0.0.202412181519
+Bundle-Version: 10.0.0.202501222112
 Bundle-RequiredExecutionEnvironment: JavaSE-11
 Require-Bundle: org.adempiere.base;bundle-version="6.2.0",org.adempiere.
  ui;bundle-version="6.2.0",org.adempiere.plugin.utils;bundle-version="6.
