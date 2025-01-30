@@ -1192,9 +1192,10 @@ public class MRP extends SvrProcess
 	    }
 
 	    order.saveEx();
-	    //Nuevo campo de M_AttributeSet_ID en la actividad del nodo
+	    
+	    //Nuevo campo de M_AttributeSet_ID en la actividad del nodo y el subProducto en el nodo de producto
 	    updateAttributeSetForOrderNodes(order.getPP_Order_ID());
-
+	    updateSubProductForOrderNodes(order.getPP_Order_ID());
 	    
 	    if (parentDocumentNo == null) {
 	        parentDocumentNo = order.get_ID();
@@ -1232,6 +1233,58 @@ public class MRP extends SvrProcess
 	        throw new AdempiereException(e);
 	    }
 	}
+	
+	protected void updateSubProductForOrderNodes(int PP_Order_ID) {
+	    String trxName = get_TrxName();
+	    String sqlOrderNodes = "SELECT PP_Order_Node_ID, AD_WF_Node_ID " +
+	                           "FROM PP_Order_Node " +
+	                           "WHERE PP_Order_ID = ?";
+	    String sqlNodeProducts = "SELECT M_Product_ID, IsSubProduct " +
+	                             "FROM PP_WF_Node_Product " +
+	                             "WHERE AD_WF_Node_ID = ?";
+	    String updateOrderNodeProduct = "UPDATE PP_Order_Node_Product " +
+	                                    "SET IsSubProduct = ? " +
+	                                    "WHERE PP_Order_Node_ID = ? AND M_Product_ID = ?";
+
+	    try (PreparedStatement pstmtOrderNodes = DB.prepareStatement(sqlOrderNodes, trxName)) {
+	        pstmtOrderNodes.setInt(1, PP_Order_ID);
+	        ResultSet rsOrderNodes = pstmtOrderNodes.executeQuery();
+
+	        while (rsOrderNodes.next()) {
+	            int PP_Order_Node_ID = rsOrderNodes.getInt("PP_Order_Node_ID");
+	            int AD_WF_Node_ID = rsOrderNodes.getInt("AD_WF_Node_ID");
+
+	            try (PreparedStatement pstmtNodeProducts = DB.prepareStatement(sqlNodeProducts, trxName)) {
+	                pstmtNodeProducts.setInt(1, AD_WF_Node_ID);
+	                ResultSet rsNodeProducts = pstmtNodeProducts.executeQuery();
+
+	                while (rsNodeProducts.next()) {
+	                    int M_Product_ID = rsNodeProducts.getInt("M_Product_ID");
+	                    boolean IsSubProduct = rsNodeProducts.getBoolean("IsSubProduct");
+
+	                    // Actualizar el registro en PP_Order_Node_Product
+	                    int rowsUpdated = DB.executeUpdate(updateOrderNodeProduct, new Object[]{
+	                        IsSubProduct, PP_Order_Node_ID, M_Product_ID
+	                    }, false, trxName);
+
+	                    if (rowsUpdated > 0) {
+	                        log.info("Updated IsSubProduct for M_Product_ID: " + M_Product_ID +
+	                                 " in PP_Order_Node_ID: " + PP_Order_Node_ID +
+	                                 " with IsSubProduct: " + IsSubProduct);
+	                    } else {
+	                        log.warning("No matching record found in PP_Order_Node_Product for M_Product_ID: " + M_Product_ID +
+	                                    " in PP_Order_Node_ID: " + PP_Order_Node_ID);
+	                    }
+	                }
+	            }
+	        }
+	    } catch (SQLException e) {
+	        log.severe("Error updating IsSubProduct: " + e.getMessage());
+	        throw new AdempiereException(e);
+	    }
+	}
+
+
 
 	
 	private void deletePO(String tableName, String whereClause, Object[] params) throws SQLException
