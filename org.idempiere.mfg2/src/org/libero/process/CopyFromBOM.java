@@ -102,8 +102,8 @@ public class CopyFromBOM extends SvrProcess {
 		List<X_PP_BatchCharge> chargelines = new Query(getCtx(), X_PP_BatchCharge.Table_Name, whereClause,
 				get_TrxName())
 				.setParameters(new Object[] { fromBom.getPP_Product_BOM_ID() })
-				.setOnlyActiveRecords(true)
-				.setOrderBy(MPPProductBOMLine.COLUMNNAME_Line).list();
+				.setOnlyActiveRecords(true).list();
+//				.setOrderBy(MPPProductBOMLine.COLUMNNAME_Line).list();
 		for(X_PP_BatchCharge fromCharge:chargelines) {
 			X_PP_BatchCharge toCharge = (X_PP_BatchCharge) MTable.get(ctx, X_PP_BatchCharge.Table_Name).getPO(0,
 					get_TrxName());
