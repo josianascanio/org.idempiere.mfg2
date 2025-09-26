@@ -204,7 +204,7 @@ public class MFG_Validator extends AbstractEventHandler {
 				// Compras
 				if (!order.isSOTrx())
 				{
-					// ⛔ Saltar MRP si el cambio proviene de recepción (matching actualiza cantidades)
+					//  Saltar MRP si el cambio proviene de recepción (matching actualiza cantidades)
 					boolean changedOnlyByReceipt =
 							po.is_ValueChanged(MOrderLine.COLUMNNAME_QtyDelivered)
 						||  po.is_ValueChanged(MOrderLine.COLUMNNAME_QtyReserved)
