@@ -8,6 +8,8 @@ package org.idempiere.component;
 
 import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.adempiere.base.event.AbstractEventHandler;
 import org.adempiere.base.event.IEventTopics;
@@ -70,13 +72,13 @@ public class MFG_Validator extends AbstractEventHandler {
 	
 	private static final String MRP_ENABLED = "MRP_ENABLED";
 	private PO po = null;
-	@Override
-	protected void initialize() {
+
+	@Override protected void initialize() {
 		boolean MRPEnabled = MSysConfig.getBooleanValue(MRP_ENABLED, true);
 		if(!MRPEnabled) {
-			return;
-		}
-		registerEvent(IEventTopics.AFTER_LOGIN);
+			return; 
+			} 
+		registerEvent(IEventTopics.AFTER_LOGIN); 
 		registerTableEvent(IEventTopics.PO_BEFORE_NEW, I_M_Movement.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_NEW, I_C_Order.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_NEW, I_C_OrderLine.Table_Name);
@@ -90,7 +92,7 @@ public class MFG_Validator extends AbstractEventHandler {
 		registerTableEvent(IEventTopics.PO_AFTER_NEW, I_PP_Order_BOMLine.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_NEW, I_C_Order.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_NEW, I_C_Order.Table_Name);
-		registerTableEvent(IEventTopics.PO_BEFORE_CHANGE, I_M_Product.Table_Name); 
+		registerTableEvent(IEventTopics.PO_BEFORE_CHANGE, I_M_Product.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_CHANGE, I_C_Order.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_CHANGE, I_C_OrderLine.Table_Name);
 		registerTableEvent(IEventTopics.PO_AFTER_CHANGE, I_M_Requisition.Table_Name);
@@ -114,14 +116,12 @@ public class MFG_Validator extends AbstractEventHandler {
 		registerTableEvent(IEventTopics.PO_BEFORE_DELETE, I_PP_Order.Table_Name);
 		registerTableEvent(IEventTopics.PO_BEFORE_DELETE, I_PP_Order_BOMLine.Table_Name);
 		registerTableEvent(IEventTopics.PO_BEFORE_DELETE, I_M_Forecast.Table_Name);
-		registerTableEvent(IEventTopics.PO_BEFORE_DELETE, I_M_ForecastLine.Table_Name); 
+		registerTableEvent(IEventTopics.PO_BEFORE_DELETE, I_M_ForecastLine.Table_Name);
 		registerTableEvent(IEventTopics.DOC_BEFORE_PREPARE, I_M_Forecast.Table_Name);
 		registerTableEvent(IEventTopics.DOC_BEFORE_COMPLETE, I_M_ForecastLine.Table_Name);
 		registerTableEvent(IEventTopics.DOC_AFTER_COMPLETE, I_M_Movement.Table_Name);
 		registerTableEvent(IEventTopics.DOC_AFTER_COMPLETE, I_M_InOut.Table_Name);
-		log.info("MFG MODEL VALIDATOR IS NOW INITIALIZED");
-	}
-
+		log.info("MFG MODEL VALIDATOR IS NOW INITIALIZED"); }
 	@Override
 	protected void doHandleEvent(Event event) {
 		String type = event.getTopic();
@@ -151,7 +151,7 @@ public class MFG_Validator extends AbstractEventHandler {
 			{
 				doc = (DocAction)po;
 			}
-				else if (po instanceof MOrderLine)
+			else if (po instanceof MOrderLine)
 			{
 				doc = ((MOrderLine)po).getParent();
 			}
@@ -174,193 +174,211 @@ public class MFG_Validator extends AbstractEventHandler {
 		 
 			if (isDelete || isVoided || !po.isActive())
 			{
-				logEvent(event, po, type);//log.fine("MPPMRP.deleteMRP(po)");
+				logEvent(event, po, type);
 				MPPMRP.deleteMRP(po);
 			}
 			else if (po instanceof MOrder)
 			{
 				MOrder order = (MOrder)po;
-			// Create/Update a planning supply when isPurchase Order
-			// or when you change DatePromised or DocStatus and is Purchase Order
+				// Compras: comportamiento original
 				if (isChange && !order.isSOTrx())
 				{
-					logEvent(event, po, type);//log.fine("isChange && !order.isSOTrx() .. MPPMRP.C_Order(order)");
+					logEvent(event, po, type);
 					MPPMRP.C_Order(order);
 				}
-			// Update MRP when you change the status order to complete or in process for a sales order
-			// or you change DatePromised
+				// Ventas
 				else if (type == IEventTopics.PO_AFTER_CHANGE && order.isSOTrx())
 				{
 					if (isReleased || MPPMRP.isChanged(order)) 
 					{	
-						logEvent(event, po, type);//log.fine("isReleased || MPPMRP.isChanged(order) .. MPPMRP.C_Order(order)");
+						logEvent(event, po, type);
 						MPPMRP.C_Order(order);
 					}
 				}
 			}
-		// 
 			else if (po instanceof MOrderLine && isChange)
 			{
 				MOrderLine ol = (MOrderLine)po;
 				MOrder order = ol.getParent();
-			// Create/Update a planning supply when isPurchase Order or you change relevant fields
+
+				// Compras
 				if (!order.isSOTrx())
 				{
-					logEvent(event, po, type);//log.fine("!order.isSOTrx() .. MPPMRP.C_OrderLine(ol)");
-					MPPMRP.C_OrderLine(ol);
+					// ⛔ Saltar MRP si el cambio proviene de recepción (matching actualiza cantidades)
+					boolean changedOnlyByReceipt =
+							po.is_ValueChanged(MOrderLine.COLUMNNAME_QtyDelivered)
+						||  po.is_ValueChanged(MOrderLine.COLUMNNAME_QtyReserved)
+						||  po.is_ValueChanged(MOrderLine.COLUMNNAME_QtyEntered);
+
+					if (changedOnlyByReceipt) {
+						log.fine("Skip MPPMRP.C_OrderLine: change came from receipt (QtyDelivered/Reserved/Entered)");
+					} else {
+						logEvent(event, po, type);
+						MPPMRP.C_OrderLine(ol);
+					}
 				}
-			// Update MRP when Sales Order have document status in process or complete and 
-			// you change relevant fields
+				// Ventas
 				else if(order.isSOTrx() && isReleased)
 				{
-					logEvent(event, po, type);//log.fine("order.isSOTrx() && isReleased .. MPPMRP.C_OrderLine(ol)");
+					logEvent(event, po, type);
 					MPPMRP.C_OrderLine(ol);
 				}
 			}
-		//
 			else if (po instanceof MRequisition && isChange)
 			{
 				MRequisition r = (MRequisition)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.M_Requisition(r)");
+				logEvent(event, po, type);
 				MPPMRP.M_Requisition(r);
 			}
-		//
 			else if (po instanceof MRequisitionLine && isChange)
 			{
 				MRequisitionLine rl = (MRequisitionLine)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.M_Requisition(rl)");
+				logEvent(event, po, type);
 				MPPMRP.M_RequisitionLine(rl);
 			}
-		//
 			else if (po instanceof X_M_Forecast && isChange)
 			{
 				X_M_Forecast fl = (X_M_Forecast)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.M_Forecast(fl)");
+				logEvent(event, po, type);
 				MPPMRP.M_Forecast(fl);
 			}
-		//
 			else if (po instanceof MForecastLine && isChange)
 			{
 				MForecastLine fl = (MForecastLine)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.M_ForecastLine(fl)");
+				logEvent(event, po, type);
 				MPPMRP.M_ForecastLine(fl);
 			}
-		
 			else if (po instanceof MDDOrder  && isChange)
 			{
 				MDDOrder order = (MDDOrder)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.DD_Order(order)");
+				logEvent(event, po, type);
 				MPPMRP.DD_Order(order);
 			}
-		
-		//
 			else if (po instanceof MDDOrderLine && isChange)
 			{
 				MDDOrderLine ol = (MDDOrderLine)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.DD_OrderLine(ol)");
+				logEvent(event, po, type);
 				MPPMRP.DD_OrderLine(ol);
 			}
-		//
 			else if (po instanceof MPPOrder && isChange)
 			{
 				MPPOrder order = (MPPOrder)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.PP_Order(order)");
+				logEvent(event, po, type);
 				MPPMRP.PP_Order(order);
 			}
-		//
 			else if (po instanceof MPPOrderBOMLine && isChange)
 			{
 				MPPOrderBOMLine obl = (MPPOrderBOMLine)po;
-				logEvent(event, po, type);//log.fine(" .. MPPMRP.PP_Order_BOMLine(obl)");
+				logEvent(event, po, type);
 				MPPMRP.PP_Order_BOMLine(obl);
-			}	
-			
-		//PO: TYPE_AFTER_NEW
+			}
+
+			//PO: TYPE_AFTER_NEW
 			if (event.getTopic().equals(IEventTopics.PO_AFTER_NEW)) {
 				po = getPO(event);
 				log.info(" topic="+event.getTopic()+" po="+po); 
-		
-		//MProduct: TYPE_BEFORE_CHANGE
-			} else if (event.getTopic().equals(IEventTopics.PO_BEFORE_CHANGE)) { 
-			 po = getPO(event);
-			log.info(" topic="+event.getTopic()+" po="+po);
-			if (po.get_TableName().equals(I_M_Product.Table_Name)) {
- 				String msg = "TODO";
- 				logEvent(event, po, type);//log.fine("EVENT MANAGER // Product: PO_BEFORE_CHANGE >> MFG TODO 1 = '"+msg+"'");
+			}
+			//MProduct: TYPE_BEFORE_CHANGE
+			else if (event.getTopic().equals(IEventTopics.PO_BEFORE_CHANGE)) { 
+				po = getPO(event);
+				log.info(" topic="+event.getTopic()+" po="+po);
+				if (po.get_TableName().equals(I_M_Product.Table_Name)) {
+					String msg = "TODO";
+					logEvent(event, po, type);
+				}
 			}
 		}
+
+		// DOC_AFTER_COMPLETE de M_InOut
 		if (po instanceof MInOut && type == IEventTopics.DOC_AFTER_COMPLETE)
+		{
+			logEvent(event, po, type);
+			MInOut inout = (MInOut)po;
+
+			if(inout.isSOTrx())
 			{
-				logEvent(event, po, type);//
-				MInOut inout = (MInOut)po;
-				if(inout.isSOTrx())
+				for (MInOutLine outline : inout.getLines())
 				{
-					for (MInOutLine outline : inout.getLines())
-					{										
-						updateMPPOrder(outline);				
-					}
+					updateMPPOrder(outline); // ventas (Make-To-Kit)
 				}
-			//Purchase Receipt
-				else
-				{	
-					for (MInOutLine line : inout.getLines())
-					{
-						final String whereClause = "C_OrderLine_ID=? AND PP_Cost_Collector_ID IS NOT NULL";
-						Collection<MOrderLine> olines = new Query(po.getCtx(), MOrderLine.Table_Name, whereClause, trxName)
-													.setParameters(new Object[]{line.getC_OrderLine_ID()})
-													.list();
-						for (MOrderLine oline : olines)
-						{
-							if(oline.getQtyOrdered().compareTo(oline.getQtyDelivered()) >= 0)
-							{	
-								MPPCostCollector cc = (MPPCostCollector) MTable
-										.get(po.getCtx(), MPPCostCollector.Table_Name)
-										.getPO(oline.getPP_Cost_Collector_ID(), trxName);
-								String docStatus = cc.completeIt();
-								cc.setDocStatus(docStatus);
-								cc.setDocAction(MPPCostCollector.DOCACTION_Close);
-								cc.saveEx(trxName);
-								return;
-							}
-						}	
-					}
-				}	
 			}
-		//
-		// Update Distribution Order Line
-			else if (po instanceof MMovement && type == IEventTopics.DOC_AFTER_COMPLETE)
+			else
 			{
-				logEvent(event, po, type);//
-				MMovement move = (MMovement)po;
-				for (MMovementLine line : move.getLines(false))
+				// ------- Compras: completa cost collectors y refresca MRP en nueva trx -------
+				final Set<Integer> affectedOrderIds = new HashSet<>();
+
+				// 1) Completar cost collectors relacionados (sin cortar el loop)
+				for (MInOutLine line : inout.getLines())
 				{
-					if(line.getDD_OrderLine_ID() > 0)
+					final String whereClause = "C_OrderLine_ID=? AND PP_Cost_Collector_ID IS NOT NULL";
+					Collection<MOrderLine> olines = new Query(po.getCtx(), MOrderLine.Table_Name, whereClause, trxName)
+							.setParameters(new Object[]{line.getC_OrderLine_ID()})
+							.list();
+					for (MOrderLine oline : olines)
 					{
-						MDDOrderLine oline= new MDDOrderLine(line.getCtx(),line.getDD_OrderLine_ID(), po.get_TrxName());
-						MLocator locator_to = MLocator.get(line.getCtx(), line.getM_LocatorTo_ID());
-						MWarehouse warehouse =  MWarehouse.get(line.getCtx(), locator_to.getM_Warehouse_ID()); 
-						if(warehouse.isInTransit())
+						affectedOrderIds.add(oline.getC_Order_ID());
+
+						if(oline.getQtyOrdered().compareTo(oline.getQtyDelivered()) >= 0)
 						{
-							oline.setQtyInTransit(oline.getQtyInTransit().add(line.getMovementQty()));
-							oline.setConfirmedQty(Env.ZERO);
+							MPPCostCollector cc = (MPPCostCollector) MTable
+									.get(po.getCtx(), MPPCostCollector.Table_Name)
+									.getPO(oline.getPP_Cost_Collector_ID(), trxName);
+							String docStatus = cc.completeIt();
+							cc.setDocStatus(docStatus);
+							cc.setDocAction(MPPCostCollector.DOCACTION_Close);
+							cc.saveEx(trxName);
 						}
-						else
-						{
-							oline.setQtyInTransit(oline.getQtyInTransit().subtract(line.getMovementQty()));
-							oline.setQtyDelivered(oline.getQtyDelivered().add(line.getMovementQty()));
-						}   
-						oline.saveEx(trxName);				   
 					}
-				}			
-				if(move.getDD_Order_ID() > 0)
-				{	
-					MDDOrder order = new MDDOrder(move.getCtx(), move.getDD_Order_ID(), move.get_TrxName());
-					order.setIsInTransit(isInTransit(order));
-					order.reserveStock(order.getLines(true, null));
-					order.saveEx(trxName);
-					}	
+				}
+
+				// 2) Refresh MRP inmediatamente fuera de la trx actual (usando null trx)
+				for (Integer orderId : affectedOrderIds) {
+					try {
+						MOrder refreshed = new MOrder(Env.getCtx(), orderId.intValue(), null); // nueva trx
+						if (!refreshed.isSOTrx()) {
+							log.info("MRP refresh (separate trx) for PO C_Order_ID=" + orderId);
+							MPPMRP.C_Order(refreshed);
+						}
+					} catch (Exception ex) {
+						log.severe("MRP refresh failed for C_Order_ID=" + orderId + " - " + ex.getMessage());
+					}
+				}
+				// ---------------------------------------------------------------------------
+			}
+		}
+		// Update Distribution Order Line
+		else if (po instanceof MMovement && type == IEventTopics.DOC_AFTER_COMPLETE)
+		{
+			logEvent(event, po, type);
+			MMovement move = (MMovement)po;
+			for (MMovementLine line : move.getLines(false))
+			{
+				if(line.getDD_OrderLine_ID() > 0)
+				{
+					MDDOrderLine oline= new MDDOrderLine(line.getCtx(),line.getDD_OrderLine_ID(), po.get_TrxName());
+					MLocator locator_to = MLocator.get(line.getCtx(), line.getM_LocatorTo_ID());
+					MWarehouse warehouse =  MWarehouse.get(line.getCtx(), locator_to.getM_Warehouse_ID()); 
+					if(warehouse.isInTransit())
+					{
+						oline.setQtyInTransit(oline.getQtyInTransit().add(line.getMovementQty()));
+						oline.setConfirmedQty(Env.ZERO);
+					}
+					else
+					{
+						oline.setQtyInTransit(oline.getQtyInTransit().subtract(line.getMovementQty()));
+						oline.setQtyDelivered(oline.getQtyDelivered().add(line.getMovementQty()));
+					}   
+					oline.saveEx(trxName);				   
 				}
 			}
+			if(move.getDD_Order_ID() > 0)
+			{	
+				MDDOrder order = new MDDOrder(move.getCtx(), move.getDD_Order_ID(), move.get_TrxName());
+				order.setIsInTransit(isInTransit(order));
+				order.reserveStock(order.getLines(true, null));
+				order.saveEx(trxName);
+			}	
+		}
 	}
 	
 	/**
