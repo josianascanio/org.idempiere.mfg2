@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.stream.Collectors;
 
 import org.adempiere.exceptions.AdempiereException;
 import org.adempiere.exceptions.DBException;
@@ -81,6 +82,7 @@ public class MRP extends SvrProcess
 	private int     p_M_Warehouse_ID= 0;
 	private boolean p_IsRequiredDRP = false;
 	private int     p_Planner_ID = 0;
+	private List<Integer> selectedOrderLines = new ArrayList<>();
 	@SuppressWarnings("unused")
 	private String  p_Version = "1";
 	/** Product ID - for testing purposes */
@@ -96,6 +98,7 @@ public class MRP extends SvrProcess
 	private Timestamp Today = new Timestamp (System.currentTimeMillis());  
 	private Timestamp TimeFence = null;
 	private Timestamp Planning_Horizon = null;
+	private Integer parentDocumentNo = null;
 	// Document Types
 	private int docTypeReq_ID = 0;
 	private int docTypeMO_ID = 0; 
@@ -114,42 +117,52 @@ public class MRP extends SvrProcess
 	private static CCache<Integer,MBPartner>   partner_cache 	= new CCache<Integer,MBPartner>(MBPartner.Table_Name, 50);
 
 
-	protected void prepare()
-	{
-		ProcessInfoParameter[] para = getParameter();
-		for (int i = 0; i < para.length; i++)
-		{
-			String name = para[i].getParameterName();
-			if (para[i].getParameter() == null)
-				;
-			else if (name.equals("DeleteMRP"))
-			{    
-				p_DeleteMRP = para[i].getParameterAsBoolean();
-			}   
-			else if (name.equals("AD_Org_ID"))
-			{    
-				p_AD_Org_ID = para[i].getParameterAsInt();
-			}                       
-			else if (name.equals("S_Resource_ID"))
-			{    
-				p_S_Resource_ID = para[i].getParameterAsInt();    
-			}
-			else if (name.equals("M_Warehouse_ID"))
-			{    
-				p_M_Warehouse_ID = para[i].getParameterAsInt();                
-			}
-			else if (name.equals("IsRequiredDRP"))
-			{    
-				p_IsRequiredDRP = para[i].getParameterAsBoolean();        
-			}
-			else if (name.equals("Version"))
-			{    
-				p_Version = (String)para[i].getParameter();        
-			}
-			else
-				log.log(Level.SEVERE,"prepare - Unknown Parameter: " + name);
-		}
-	}	//	prepare
+	protected void prepare() {
+	    ProcessInfoParameter[] para = getParameter();
+	    for (int i = 0; i < para.length; i++) {
+	        String name = para[i].getParameterName();
+	        if (para[i].getParameter() == null) {
+	            ;
+	        } else if (name.equals("DeleteMRP")) {
+	            p_DeleteMRP = para[i].getParameterAsBoolean();
+	        } else if (name.equals("AD_Org_ID")) {
+	            p_AD_Org_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("S_Resource_ID")) {
+	            p_S_Resource_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("M_Warehouse_ID")) {
+	            p_M_Warehouse_ID = para[i].getParameterAsInt();
+	        } else if (name.equals("IsRequiredDRP")) {
+	            p_IsRequiredDRP = para[i].getParameterAsBoolean();
+	        } else if (name.equals("Version")) {
+	            p_Version = (String) para[i].getParameter();
+	        } else if (name.equals("C_Order_ID")) {
+	            String selectedOrders = para[i].getParameter().toString();
+	            if (selectedOrders != null && !selectedOrders.isEmpty()) {
+	                for (String id : selectedOrders.split(",")) {
+	                    int orderId = Integer.parseInt(id.trim());
+	                    String sqlOrderLines = "SELECT C_OrderLine_ID FROM C_OrderLine WHERE C_Order_ID = ?";
+	                    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderLines, get_TrxName())) {
+	                        pstmt.setInt(1, orderId);
+	                        try (ResultSet rs = pstmt.executeQuery()) {
+	                            while (rs.next()) {
+	                                selectedOrderLines.add(rs.getInt("C_OrderLine_ID"));
+	                            }
+	                        }
+	                    } catch (SQLException e) {
+	                        throw new DBException(e);
+	                    }
+	                }
+	            }
+	        } else if (name.equals("DatePromisedFrom")) {
+	            DatePromisedFrom = (Timestamp) para[i].getParameter();
+	        } else if (name.equals("DatePromisedTo")) {
+	            DatePromisedTo = (Timestamp) para[i].getParameter();
+	        } else {
+	            log.log(Level.SEVERE, "prepare - Unknown Parameter: " + name);
+	        }
+	    }
+	}
+
 	
 	/**
 	 * @return the p_AD_Org_ID
@@ -355,8 +368,24 @@ public class MRP extends SvrProcess
 							+" AND mrp.M_Warehouse_ID=?"
 							+" AND mrp.DatePromised<=?"
 							+" AND COALESCE(mrp.LowLevel,0)=? "
-							+(p_M_Product_ID > 0 ? " AND mrp.M_Product_ID="+p_M_Product_ID : "")
-							+" ORDER BY  mrp.M_Product_ID , mrp.DatePromised";
+							+(p_M_Product_ID > 0 ? " AND mrp.M_Product_ID="+p_M_Product_ID : "");
+							
+							
+							if (!selectedOrderLines.isEmpty()) {
+							    sql += " AND mrp.C_OrderLine_ID IN (" + selectedOrderLines.stream()
+							              .map(String::valueOf).collect(Collectors.joining(",")) + ")";
+							}	
+							
+							if (DatePromisedFrom != null) {
+							    sql += " AND mrp.DatePromised >= ?";
+							}
+							if (DatePromisedTo != null) {
+							    sql += " AND mrp.DatePromised <= ?";
+							}
+							
+							
+							sql +=" ORDER BY  mrp.M_Product_ID , mrp.DatePromised";
+							
 				pstmt = DB.prepareStatement (sql, get_TrxName());
 				pstmt.setString(1, MPPMRP.TYPEMRP_Demand);
 				pstmt.setInt(2, AD_Client_ID);
@@ -364,6 +393,13 @@ public class MRP extends SvrProcess
 				pstmt.setInt(4, M_Warehouse_ID);
 				pstmt.setTimestamp(5, Planning_Horizon);
 				pstmt.setInt(6, level);
+				int paramIndex = 7;
+				if (DatePromisedFrom != null) {
+				    pstmt.setTimestamp(paramIndex++, DatePromisedFrom);
+				}
+				if (DatePromisedTo != null) {
+				    pstmt.setTimestamp(paramIndex++, DatePromisedTo);
+				}
 				rs = pstmt.executeQuery();
 				while (rs.next())
 				{
@@ -843,7 +879,7 @@ public class MRP extends SvrProcess
 		}
 		// Manufacturing Order
 		else if (product.isBOM())
-		{
+		{	 
 			createPPOrder(AD_Org_ID, PP_MRP_ID, product,QtyPlanned, DemandDateStartSchedule);
 		}
 		else
@@ -1069,6 +1105,37 @@ public class MRP extends SvrProcess
 			throw new AdempiereException("@FillMandatory@ @PP_Product_BOM_ID@, @AD_Workflow_ID@ ( @M_Product_ID@="+product.getValue()+")");
 		}
 		
+		//C_OrderLine_ID desde PP_MRP
+	    String sqlOrderLine = "SELECT C_OrderLine_ID FROM PP_MRP WHERE PP_MRP_ID = ?";
+	    int C_OrderLine_ID = DB.getSQLValue(get_TrxName(), sqlOrderLine, PP_MRP_ID);
+
+	    if (C_OrderLine_ID <= 0) {
+	        throw new AdempiereException("No valid C_OrderLine_ID found for PP_MRP_ID: " + PP_MRP_ID);
+	    }
+	    
+	    if (!selectedOrderLines.isEmpty() && !selectedOrderLines.contains(C_OrderLine_ID)) {
+	        log.info("Skipping C_OrderLine_ID: " + C_OrderLine_ID + " as it is not in the selected list.");
+	        return;
+	    }
+
+	    // Verificar si ya existe una orden asociada al C_OrderLine_ID
+	    String sqlCheck = "SELECT COUNT(*) FROM PP_Order WHERE C_OrderLine_ID = ? AND DocStatus IN ('CL', 'CO')";
+	    int existingOrders = DB.getSQLValue(get_TrxName(), sqlCheck, C_OrderLine_ID);
+
+	    if (existingOrders > 0) {
+	        log.warning("Manufacturing order already exists for C_OrderLine_ID: " + C_OrderLine_ID);
+	        return;
+	    }
+	    
+	    String sqlDuplicateCheck = "SELECT COUNT(*) FROM PP_Order WHERE C_OrderLine_ID = ? AND PP_OrderRelated_ID = ? AND M_Product_ID = ? AND DocStatus = 'DR'";
+	    int duplicateCount = DB.getSQLValue(get_TrxName(), sqlDuplicateCheck, C_OrderLine_ID, parentDocumentNo, m_product_planning.getM_Product_ID());
+
+	    if (duplicateCount > 0) {
+	        log.warning("Duplicate related order detected for C_OrderLine_ID: " + C_OrderLine_ID + ", Product_ID: " + m_product_planning.getM_Product_ID());
+	        return;
+	    }
+
+		
 		MPPOrder order = (MPPOrder)MTable.get(getCtx(), MPPOrder.Table_Name).getPO(0, get_TrxName());
 		order.addDescription("MO generated from MRP");
 		order.setAD_Org_ID(AD_Org_ID);
@@ -1095,6 +1162,7 @@ public class MRP extends SvrProcess
 		order.setPlanner_ID(m_product_planning.getPlanner_ID());
 		order.setDateOrdered(getToday());                       
 		order.setDatePromised(DemandDateStartSchedule);
+	
 		
 		//TODO red1-- phepetko commented 
 		int duration =  0;//MPPMRP.getDurationDays(null,QtyPlanned, m_product_planning);
@@ -1108,11 +1176,116 @@ public class MRP extends SvrProcess
 		order.setScheduleType(MPPMRP.TYPEMRP_Demand);
 		order.setPriorityRule(MPPOrder.PRIORITYRULE_Medium);
 		order.setDocAction(MPPOrder.DOCACTION_Complete);
-		order.saveEx();
-		//commitEx();
+		order.setC_OrderLine_ID(C_OrderLine_ID);
+		
+	    // Relacionar la orden si es del mismo C_OrderLine_ID
+	    if (parentDocumentNo != null) {
+	        String sqlParentOrderLine = "SELECT C_OrderLine_ID FROM PP_Order WHERE PP_Order_ID = ?";
+	        int parentOrderLineID = DB.getSQLValue(get_TrxName(), sqlParentOrderLine, parentDocumentNo);
 
-		count_MO += 1;
+	        if (parentOrderLineID == C_OrderLine_ID) {
+	            order.set_ValueOfColumn("PP_OrderRelated_ID", parentDocumentNo);
+	        } else {
+	            log.info("C_OrderLine_ID changed, capturing a new parentDocumentNo.");
+	            parentDocumentNo = null; 
+	        }
+	    }
+
+	    order.saveEx();
+	    
+	    //Nuevo campo de M_AttributeSet_ID en la actividad del nodo y el subProducto en el nodo de producto
+	    updateAttributeSetForOrderNodes(order.getPP_Order_ID());
+	    updateSubProductForOrderNodes(order.getPP_Order_ID());
+	    
+	    if (parentDocumentNo == null) {
+	        parentDocumentNo = order.get_ID();
+	        log.info("Captured new parentDocumentNo: " + parentDocumentNo);
+	    }
+
+	    count_MO += 1;
 	}
+	
+	protected void updateAttributeSetForOrderNodes(int PP_Order_ID) {
+	    String trxName = get_TrxName();
+	    String sqlOrderNodes = "SELECT PP_Order_Node_ID, AD_WF_Node_ID FROM PP_Order_Node WHERE PP_Order_ID = ?";
+
+	    try (PreparedStatement pstmt = DB.prepareStatement(sqlOrderNodes, trxName)) {
+	        pstmt.setInt(1, PP_Order_ID);
+	        ResultSet rs = pstmt.executeQuery();
+
+	        while (rs.next()) {
+	            int PP_Order_Node_ID = rs.getInt("PP_Order_Node_ID");
+	            int AD_WF_Node_ID = rs.getInt("AD_WF_Node_ID");
+
+	            String sqlWorkflowNode = "SELECT M_AttributeSet_ID FROM AD_WF_Node WHERE AD_WF_Node_ID = ?";
+	            int attributeSetID = DB.getSQLValue(trxName, sqlWorkflowNode, AD_WF_Node_ID);
+
+	            if (attributeSetID > 0) {
+	                String updateSQL = "UPDATE PP_Order_Node SET M_AttributeSet_ID = ? WHERE PP_Order_Node_ID = ?";
+	                DB.executeUpdate(updateSQL, new Object[]{attributeSetID, PP_Order_Node_ID}, false, trxName);
+	                log.info("Updated M_AttributeSet_ID for PP_Order_Node_ID: " + PP_Order_Node_ID);
+	            } else {
+	                log.warning("No M_AttributeSet_ID found for AD_WF_Node_ID: " + AD_WF_Node_ID);
+	            }
+	        }
+	    } catch (SQLException e) {
+	        log.severe("Error updating M_AttributeSet_ID: " + e.getMessage());
+	        throw new AdempiereException(e);
+	    }
+	}
+	
+	protected void updateSubProductForOrderNodes(int PP_Order_ID) {
+	    String trxName = get_TrxName();
+	    String sqlOrderNodes = "SELECT PP_Order_Node_ID, AD_WF_Node_ID " +
+	                           "FROM PP_Order_Node " +
+	                           "WHERE PP_Order_ID = ?";
+	    String sqlNodeProducts = "SELECT M_Product_ID, IsSubProduct " +
+	                             "FROM PP_WF_Node_Product " +
+	                             "WHERE AD_WF_Node_ID = ?";
+	    String updateOrderNodeProduct = "UPDATE PP_Order_Node_Product " +
+	                                    "SET IsSubProduct = ? " +
+	                                    "WHERE PP_Order_Node_ID = ? AND M_Product_ID = ?";
+
+	    try (PreparedStatement pstmtOrderNodes = DB.prepareStatement(sqlOrderNodes, trxName)) {
+	        pstmtOrderNodes.setInt(1, PP_Order_ID);
+	        ResultSet rsOrderNodes = pstmtOrderNodes.executeQuery();
+
+	        while (rsOrderNodes.next()) {
+	            int PP_Order_Node_ID = rsOrderNodes.getInt("PP_Order_Node_ID");
+	            int AD_WF_Node_ID = rsOrderNodes.getInt("AD_WF_Node_ID");
+
+	            try (PreparedStatement pstmtNodeProducts = DB.prepareStatement(sqlNodeProducts, trxName)) {
+	                pstmtNodeProducts.setInt(1, AD_WF_Node_ID);
+	                ResultSet rsNodeProducts = pstmtNodeProducts.executeQuery();
+
+	                while (rsNodeProducts.next()) {
+	                    int M_Product_ID = rsNodeProducts.getInt("M_Product_ID");
+	                    boolean IsSubProduct = rsNodeProducts.getBoolean("IsSubProduct");
+
+	                    // Actualizar el registro en PP_Order_Node_Product
+	                    int rowsUpdated = DB.executeUpdate(updateOrderNodeProduct, new Object[]{
+	                        IsSubProduct, PP_Order_Node_ID, M_Product_ID
+	                    }, false, trxName);
+
+	                    if (rowsUpdated > 0) {
+	                        log.info("Updated IsSubProduct for M_Product_ID: " + M_Product_ID +
+	                                 " in PP_Order_Node_ID: " + PP_Order_Node_ID +
+	                                 " with IsSubProduct: " + IsSubProduct);
+	                    } else {
+	                        log.warning("No matching record found in PP_Order_Node_Product for M_Product_ID: " + M_Product_ID +
+	                                    " in PP_Order_Node_ID: " + PP_Order_Node_ID);
+	                    }
+	                }
+	            }
+	        }
+	    } catch (SQLException e) {
+	        log.severe("Error updating IsSubProduct: " + e.getMessage());
+	        throw new AdempiereException(e);
+	    }
+	}
+
+
+
 	
 	private void deletePO(String tableName, String whereClause, Object[] params) throws SQLException
 	{

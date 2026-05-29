@@ -1154,9 +1154,6 @@ public class MPPOrder extends X_PP_Order implements DocAction
 															getQtyOrdered(),
 															get_TrxName());
 					PP_Order_Node.setAD_Org_ID(getAD_Org_ID());
-			        // Copiar M_AttributeSet_ID desde el nodo base al nodo de la orden
-			        PP_Order_Node.set_ValueOfColumn("M_AttributeSet_ID", AD_WF_Node.get_Value("M_AttributeSet_ID"));
-
 					PP_Order_Node.saveEx(get_TrxName());
 					
 					for (MWFNodeNext AD_WF_NodeNext : AD_WF_Node.getTransitions(getAD_Client_ID()))
@@ -1170,14 +1167,7 @@ public class MPPOrder extends X_PP_Order implements DocAction
 					{
 						MPPOrderNodeProduct nodeOrderProduct = new MPPOrderNodeProduct(wfnp, PP_Order_Node);
 						nodeOrderProduct.setAD_Org_ID(getAD_Org_ID());
-					    // Copia directa de columnas personalizadas sin usar getters del modelo
-					    nodeOrderProduct.set_ValueOfColumn("IsSubProduct", wfnp.get_Value("IsSubProduct"));
-					    nodeOrderProduct.set_ValueOfColumn("IsSubcontracting", wfnp.get_Value("IsSubcontracting"));
-
 						nodeOrderProduct.saveEx(get_TrxName());
-						
-			
-
 					}
 					
 					for (MPPWFNodeAsset wfna : MPPWFNodeAsset.forAD_WF_Node_ID(getCtx(), AD_WF_Node.get_ID()))
@@ -1525,7 +1515,7 @@ public class MPPOrder extends X_PP_Order implements DocAction
 		setC_DocType_ID(getC_DocTypeTarget_ID());
 		setDocStatus(DOCSTATUS_Drafted);
 		setDocAction(DOCACTION_None);	
-//		setC_OrderLine_ID(MPPMRP.C_OrderLine_ID);//red1 harmless DNA for other MRPs from this MO
+		setC_OrderLine_ID(MPPMRP.C_OrderLine_ID);//red1 harmless DNA for other MRPs from this MO
 	}
 	
 	/**

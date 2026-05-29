@@ -915,7 +915,7 @@ ValueChangeListener,Serializable,WTableModelListener
 						if (isCloseDocument)
 						{
 							order.setDateFinish(getMovementDate());
-							order.closeIt();
+							//order.closeIt();
 							order.saveEx();
 						}
 					}

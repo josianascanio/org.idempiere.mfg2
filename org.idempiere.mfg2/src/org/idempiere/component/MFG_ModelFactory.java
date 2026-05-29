@@ -10,7 +10,6 @@ import org.compiere.model.PO;
 import org.compiere.util.Env;
 import org.eevolution.model.MDDOrder;
 import org.eevolution.model.MDDOrderLine;
-import org.eevolution.model.MPPProductBOM;
 import org.eevolution.model.MPPProductBOMLine;
 import org.eevolution.model.MPPProductPlanning;
 import org.libero.model.*;
@@ -75,8 +74,8 @@ public class MFG_ModelFactory implements IModelFactory {
 		   } else if (tableName.equals(MQMSpecificationLine.Table_Name)) {
 			     return MQMSpecificationLine.class;
 
-		   } else if (tableName.equals(MPPProductBOM.Table_Name)) {
-			     return MPPProductBOM.class;
+		   } else if (tableName.equals(MPPProductBom.Table_Name)) {
+			     return MPPProductBom.class;
 
 		   } else if (tableName.equals(MPPProductBOMLine.Table_Name)) {
 			     return MPPProductBOMLine.class;
@@ -160,8 +159,8 @@ public class MFG_ModelFactory implements IModelFactory {
 		   } else if (tableName.equals(MQMSpecificationLine.Table_Name)) {
 			     return new MQMSpecificationLine(Env.getCtx(), Record_ID, trxName);
 
-		   } else if (tableName.equals(MPPProductBOM.Table_Name)) {
-			     return new MPPProductBOM(Env.getCtx(), Record_ID, trxName);
+		   } else if (tableName.equals(MPPProductBom.Table_Name)) {
+			     return new MPPProductBom(Env.getCtx(), Record_ID, trxName);
 
 		   } else if (tableName.equals(MPPProductBOMLine.Table_Name)) {
 			     return new MPPProductBOMLine(Env.getCtx(), Record_ID, trxName);
@@ -251,8 +250,8 @@ public class MFG_ModelFactory implements IModelFactory {
 		   } else if (tableName.equals(MQMSpecificationLine.Table_Name)) {
 			     return new MQMSpecificationLine(Env.getCtx(), rs, trxName);
 
-		   } else if (tableName.equals(MPPProductBOM.Table_Name)) {
-			     return new MPPProductBOM(Env.getCtx(), rs, trxName);
+		   } else if (tableName.equals(MPPProductBom.Table_Name)) {
+			     return new MPPProductBom(Env.getCtx(), rs, trxName);
 
 		   } else if (tableName.equals(MPPProductBOMLine.Table_Name)) {
 			     return new MPPProductBOMLine(Env.getCtx(), rs, trxName);
