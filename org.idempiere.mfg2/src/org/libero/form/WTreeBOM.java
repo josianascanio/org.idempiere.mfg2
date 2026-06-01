@@ -229,8 +229,9 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 		center.appendChild(dataPane);
 		dataPane.appendChild(tableBOM);
 		tableBOM.setVflex(true);
-		tableBOM.setFixedLayout(true);
-		center.setFlex(true);
+		//tableBOM.setFixedLayout(true);Update to version12
+		center.setVflex("1"); //update to version 12
+		//center.setFlex(true);
 		center.setAutoscroll(true);
 	}
 	
@@ -312,7 +313,7 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 			
 			SimpleTreeModel model = new SimpleTreeModel(parent);
 			m_tree.setPageSize(-1);
-			m_tree.setTreeitemRenderer(model);
+			//m_tree.setTreeitemRenderer(model); Update to version 12
 			m_tree.setModel(model);
 			
 		}
@@ -341,7 +342,7 @@ public class WTreeBOM extends TreeBOM implements IFormController, EventListener,
 			
 			SimpleTreeModel model = new SimpleTreeModel(parent);
 			m_tree.setPageSize(-1);
-			m_tree.setTreeitemRenderer(model);
+			//m_tree.setTreeitemRenderer(model); Update to versión12
 			m_tree.setModel(model);
 			
 		}

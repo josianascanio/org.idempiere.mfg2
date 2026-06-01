@@ -556,8 +556,9 @@ public class WMRPDetailed extends MRPDetailed implements IFormController, EventL
 		center.appendChild(p_table);
 		mainLayout.appendChild(center);
 		p_table.setVflex(true);
-		p_table.setFixedLayout(true);
-		center.setFlex(true);
+		//p_table.setFixedLayout(true); Update to version 12
+		//center.setFlex(true);
+		center.setVflex("1"); //update to version 12
 		//center.setAutoscroll(true);
 		
 		Div div = new Div();
