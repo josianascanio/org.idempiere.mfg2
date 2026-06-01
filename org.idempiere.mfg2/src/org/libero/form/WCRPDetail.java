@@ -226,9 +226,9 @@ public class WCRPDetail extends CRPDetail implements IFormController,
 
 		SimpleTreeModel model = new SimpleTreeModel(root);
 		tree.setPageSize(-1);
-		tree.setTreeitemRenderer(model);
+		//tree.setTreeitemRenderer(model); Update to version12
 		tree.setModel(model);
-
+		
 		return tree;
 	}
 
