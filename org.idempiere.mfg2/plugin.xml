@@ -114,6 +114,13 @@
       </process>
    </extension>
    <extension
+         id="org.libero.process.MRPFullRun"
+         point="org.adempiere.base.Process">
+      <process
+            class="org.libero.process.MRPFullRun">
+      </process>
+   </extension>
+   <extension
          id="org.libero.process.PP_Product_BOM_Check"
          point="org.adempiere.base.Process">
       <process

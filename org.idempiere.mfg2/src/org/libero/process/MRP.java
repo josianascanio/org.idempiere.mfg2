@@ -95,6 +95,8 @@ public class MRP extends SvrProcess
 	private BigDecimal QtyScheduledReceipts = Env.ZERO;
 	private Timestamp DatePromisedFrom = null;
 	private Timestamp DatePromisedTo = null;
+	private Timestamp p_DatePromisedFilterFrom = null;
+	private Timestamp p_DatePromisedFilterTo = null;
 	private Timestamp Today = new Timestamp (System.currentTimeMillis());  
 	private Timestamp TimeFence = null;
 	private Timestamp Planning_Horizon = null;
@@ -154,9 +156,9 @@ public class MRP extends SvrProcess
 	                }
 	            }
 	        } else if (name.equals("DatePromisedFrom")) {
-	            DatePromisedFrom = (Timestamp) para[i].getParameter();
+	            p_DatePromisedFilterFrom = (Timestamp) para[i].getParameter();
 	        } else if (name.equals("DatePromisedTo")) {
-	            DatePromisedTo = (Timestamp) para[i].getParameter();
+	            p_DatePromisedFilterTo = (Timestamp) para[i].getParameter();
 	        } else {
 	            log.log(Level.SEVERE, "prepare - Unknown Parameter: " + name);
 	        }
@@ -376,10 +378,10 @@ public class MRP extends SvrProcess
 							              .map(String::valueOf).collect(Collectors.joining(",")) + ")";
 							}	
 							
-							if (DatePromisedFrom != null) {
+							if (p_DatePromisedFilterFrom != null) {
 							    sql += " AND mrp.DatePromised >= ?";
 							}
-							if (DatePromisedTo != null) {
+							if (p_DatePromisedFilterTo != null) {
 							    sql += " AND mrp.DatePromised <= ?";
 							}
 							
@@ -394,11 +396,11 @@ public class MRP extends SvrProcess
 				pstmt.setTimestamp(5, Planning_Horizon);
 				pstmt.setInt(6, level);
 				int paramIndex = 7;
-				if (DatePromisedFrom != null) {
-				    pstmt.setTimestamp(paramIndex++, DatePromisedFrom);
+				if (p_DatePromisedFilterFrom != null) {
+				    pstmt.setTimestamp(paramIndex++, p_DatePromisedFilterFrom);
 				}
-				if (DatePromisedTo != null) {
-				    pstmt.setTimestamp(paramIndex++, DatePromisedTo);
+				if (p_DatePromisedFilterTo != null) {
+				    pstmt.setTimestamp(paramIndex++, p_DatePromisedFilterTo);
 				}
 				rs = pstmt.executeQuery();
 				while (rs.next())
@@ -1618,4 +1620,3 @@ public class MRP extends SvrProcess
 		return BOMType;
 	}
 }
-
